@@ -241,10 +241,15 @@ resnet.load_state_dict(state['net'])
 losses = train(resnet, data['train'], epochs=20, lr=.001, print_every=10, checkpoint_path=checkpoints)
 ```
 
-
+![](ResNet152Pre1.PNG)
 
 ## Results 
 
+### General Submissions
+![](res.PNG)
+
+### Final Submissions
+![](selectedSub.PNG)
 
 ## Challenges
 ### Internal
