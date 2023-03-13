@@ -82,5 +82,113 @@ To begin the training we used the pre-trained model of ResNet18, which is then l
 
 For the ResNet18 model, we followed the tutorial and went through two sets of training. Our initial set was achieved by loading a pre-trained version of ResNet18 from the PyTorch library. This was then followed by using our current model in a second round of training. After two sets of training, we used the model as our submitted prediction. 
 
+```
+# Method to train models
+
+def train(net, dataloader, epochs=1, start_epoch=0, lr=0.01, momentum=0.9, decay=0.0005, 
+          verbose=1, print_every=10, state=None, schedule={}, checkpoint_path=None):
+    net.to(device)
+    net.train()
+    losses = []
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum, weight_decay=decay)
+
+    # Load previous training state
+    if state:
+        net.load_state_dict(state['net'])
+        optimizer.load_state_dict(state['optimizer'])
+        start_epoch = state['epoch']
+        losses = state['losses']
+
+    # Fast forward lr schedule through already trained epochs
+    for epoch in range(start_epoch):
+        if epoch in schedule:
+            print ("Learning rate: %f"% schedule[epoch])
+            for g in optimizer.param_groups:
+                g['lr'] = schedule[epoch]
+
+    for epoch in range(start_epoch, epochs):
+        sum_loss = 0.0
+
+        # Update learning rate when scheduled
+        if epoch in schedule:
+            print ("Learning rate: %f"% schedule[epoch])
+            for g in optimizer.param_groups:
+                g['lr'] = schedule[epoch]
+
+        for i, batch in enumerate(dataloader, 0):
+            inputs, labels = batch[0].to(device), batch[1].to(device)
+
+            optimizer.zero_grad()
+
+            outputs = net(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()  # autograd magic, computes all the partial derivatives
+            optimizer.step() # takes a step in gradient direction
+
+            losses.append(loss.item())
+            sum_loss += loss.item()
+
+            if i % print_every == print_every-1:    # print every 10 mini-batches
+                if verbose:
+                  print('[%d, %5d] loss: %.3f' % (epoch, i + 1, sum_loss / print_every))
+                sum_loss = 0.0
+        if checkpoint_path:
+            state = {'epoch': epoch+1, 'net': net.state_dict(), 'optimizer': optimizer.state_dict(), 'losses': losses}
+            torch.save(state, checkpoint_path + 'checkpoint-%d.pkl'%(epoch+1))
+    return losses
+```
+
 The tests were a total of 10 epochs with each test run for 5 epochs with a learning rate of 0.01. 
 ![](ResNet18.PNG)
+
+### ResNet152
+
+Another neural network we used was ResNet152, which will use 152 layers within the neural network compared to the 18 from ResNet18.  With this neural network, we also adapted from the class code but this time adjusting the values with get_bird_data(). We did a total of three different sets of training for Resnet152. In each of our training, we optimized the code by making various changes to understand the network and get the best results.
+
+The training process was kept the same, we loaded a pre-trained model of ResNet152 through the pytorch library, but with a mandatory change of the nn.Linear(512, 555) to nn.Linear(2048, 555) was needed as the ResNet152 model had an in-features value of 2048.
+
+In our first training of the model ResNet152, the preprocessing for ResNet152 we keep it similar to ResNet18 as we wanted to have some control in our first round of training, thus we kept the preprocessing as similar as possible to ResNet18 with minor changes to allow the model to fully go through the training. 
+
+```
+# Train with resnet152
+resnet = torch.hub.load('pytorch/vision:v0.6.0', 'resnet152', pretrained=True)
+resnet.fc = nn.Linear(2048, 555) # This will reinitialize the layer as well
+
+state = torch.load(checkpoints + 'checkpoint-9.pkl')
+resnet.load_state_dict(state['net'])
+losses = train(resnet, data['train'], epochs=10, lr=.01, print_every=10, checkpoint_path=checkpoints)
+```
+
+
+
+```
+# Update get_bird_data with preprocessing and change batch size to 32
+
+def get_bird_data(augmentation=0):
+    transform_train = transforms.Compose([
+        transforms.Resize(224),
+        transforms.RandomCrop(224, padding=16, padding_mode='edge'),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    
+    transform_test = transforms.Compose([
+        transforms.Resize(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    trainset = torchvision.datasets.ImageFolder(root='/workspace/birds23wi/birds/train', transform=transform_train)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=32, shuffle=True, num_workers=2)
+
+    testset = torchvision.datasets.ImageFolder(root='/workspace/birds23wi/birds/test', transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=2)
+    classes = open("/workspace/birds23wi/birds/names.txt").read().strip().split("\n")
+    class_to_idx = trainset.class_to_idx
+    idx_to_class = {int(v): int(k) for k, v in class_to_idx.items()}
+    idx_to_name = {k: classes[v] for k,v in idx_to_class.items()}
+    return {'train': trainloader, 'test': testloader, 'to_class': idx_to_class, 'to_name':idx_to_name}
+
+data = get_bird_data()
+```
