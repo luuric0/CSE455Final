@@ -83,3 +83,4 @@ To begin the training we used the pre-trained model of ResNet18, which is then l
 For the ResNet18 model, we followed the tutorial and went through two sets of training. Our initial set was achieved by loading a pre-trained version of ResNet18 from the PyTorch library. This was then followed by using our current model in a second round of training. After two sets of training, we used the model as our submitted prediction. 
 
 The tests were a total of 10 epochs with each test run for 5 epochs with a learning rate of 0.01. 
+![](ResNet18.PNG)
